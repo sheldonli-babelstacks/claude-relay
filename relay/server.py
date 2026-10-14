@@ -60,10 +60,10 @@ def make_handler(config: Config, state: State, router: Router):
             if not config.github_webhook_secret:
                 self._respond(500, {"error": "server not configured"})
                 return
-            from .verify import verify_github_signature
+            from .verify import verify_hmac_sha256
 
             sig = self.headers.get("X-Hub-Signature-256")
-            if not verify_github_signature(config.github_webhook_secret, body, sig):
+            if not verify_hmac_sha256(config.github_webhook_secret, body, sig):
                 logger.warning("github signature invalid", extra={"fields": body_fingerprint(body)})
                 self._respond(401, {"error": "bad signature"})
                 return
@@ -88,12 +88,12 @@ def make_handler(config: Config, state: State, router: Router):
             if not config.jira_webhook_secret:
                 self._respond(500, {"error": "server not configured"})
                 return
-            from .verify import verify_shared_secret
+            from .verify import verify_hmac_sha256
 
-            provided = self.headers.get("X-Relay-Secret")
-            if not verify_shared_secret(config.jira_webhook_secret, provided):
-                logger.warning("jira secret invalid", extra={"fields": body_fingerprint(body)})
-                self._respond(401, {"error": "bad secret"})
+            sig = self.headers.get("X-Hub-Signature")
+            if not verify_hmac_sha256(config.jira_webhook_secret, body, sig):
+                logger.warning("jira signature invalid", extra={"fields": body_fingerprint(body)})
+                self._respond(401, {"error": "bad signature"})
                 return
 
             try:
