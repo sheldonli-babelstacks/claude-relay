@@ -139,9 +139,35 @@ def make_handler(config: Config, state: State, router: Router):
                 return
 
             route = next((r for r in config.routes if r.name == route_name), None)
-            if route is None or route.action.get("type") != "wake":
+            action_type = route.action.get("type") if route else None
+            if route is None or action_type not in ("wake", "send_named"):
                 self._respond(404, {"error": "unknown route"})
                 return
+
+            if action_type == "wake":
+                account = config.accounts[route.action["account"]]
+                session_id = route.action["session_id"]
+            else:  # send_named：POST body 里的 "to" 是花名册里的姓名，不是 session_id
+                from .roster import load_roster
+
+                to_name = str(payload.get("to", "")).strip()
+                if not to_name:
+                    self._respond(400, {"error": "to required"})
+                    return
+                roster = load_roster(route.action["roster_path"])
+                entry = roster.get(to_name)
+                if entry is None:
+                    self._respond(404, {"error": f"{to_name!r} 不在花名册里"})
+                    return
+                acct_alias = entry.get("account", "a")
+                account = config.accounts.get(acct_alias)
+                if account is None:
+                    self._respond(500, {"error": f"{to_name} 的账号 {acct_alias!r} 没在 relay 配置里"})
+                    return
+                session_id = entry["session_id"]
+                prefix = route.template.get("prefix")
+                if prefix:
+                    message = f"{prefix}\n{message}"
 
             try:
                 check_and_record_wake(state, route.name, config.anti_loop)
@@ -149,8 +175,6 @@ def make_handler(config: Config, state: State, router: Router):
                 self._respond(503, {"error": "circuit breaker open", "reason": str(e)})
                 return
 
-            account = config.accounts[route.action["account"]]
-            session_id = route.action["session_id"]
             result = wake(account, session_id, message)
             if not result.ok:
                 write_dead_letter(

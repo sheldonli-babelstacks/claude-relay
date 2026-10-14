@@ -119,6 +119,11 @@ def load_config(path: str) -> Config:
         elif action_type == "wake_mentioned":
             if not r["action"].get("roster_path"):
                 raise ConfigError(f"路由 {r['name']} 是 wake_mentioned 类型，缺 action.roster_path")
+        elif action_type == "send_named":
+            if r.get("source") != "send":
+                raise ConfigError(f"路由 {r['name']} 是 send_named 类型，但 source 不是 send")
+            if not r["action"].get("roster_path"):
+                raise ConfigError(f"路由 {r['name']} 是 send_named 类型，缺 action.roster_path")
         routes.append(
             Route(
                 name=r["name"],

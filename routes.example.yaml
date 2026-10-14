@@ -103,3 +103,17 @@ routes:
       account: a
       session_id: "<目标会话 session_id，占位符>"
       token: "${SEND_ADHOC_TOKEN}"   # POST /send/send-ad-hoc 时 Authorization: Bearer <token>
+
+  - name: send-to-roster
+    # 会话之间互相发消息：不用知道对方 session_id，按花名册里的姓名发就行。
+    # POST /send/send-to-roster  Authorization: Bearer <token>
+    # body: {"to": "Morgan", "message": "..."}
+    # 所有能拿到这个 token 的会话都能发给花名册里任何人——跟 wake_mentioned 一样
+    # 用的是同一份花名册、同一套账号配置，token 一份共用，不是一人一个。
+    source: send
+    action:
+      type: send_named
+      roster_path: /var/lib/claude-relay/roster.json
+      token: "${SEND_ROSTER_TOKEN}"
+    template:
+      prefix: "[claude-relay] 会话消息"

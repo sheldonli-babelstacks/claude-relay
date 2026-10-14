@@ -33,6 +33,19 @@ python3 -m relay --config routes.yaml --bind 127.0.0.1 --port 8787
 
 默认只绑 `127.0.0.1`，对外经反向代理（见 `deploy/`）。
 
+## 会话间互发消息
+
+不用知道对方 session_id：配一条 `source: send` + `action.type: send_named` 的路由（见
+`routes.example.yaml` 里的 `send-to-roster`），花名册里有的人都能按姓名发。
+
+```bash
+export CLAUDE_RELAY_TOKEN=...          # 这条路由的令牌，只放环境变量
+export CLAUDE_RELAY_URL=https://relay.babelstacks.com/send/send-to-roster  # 不设就用这个默认值
+python3 scripts/send.py Mason "GUJI-224 10860 的消息，看一下"
+```
+
+`scripts/send.py` 只用标准库，哪个会话环境都能直接跑，不用装依赖。令牌是这条路由所有人共用的一份，不是一人一个——谁都能拿它发给花名册里任何人，别写进仓库/卡/日志，只放环境变量。
+
 ## 部署
 
 `deploy/claude-relay.service`（systemd，专用低权限用户，`ProtectSystem=strict`）+ `deploy/env.example`（复制成 `/etc/claude-relay/env`，权限 600，不进仓）。
