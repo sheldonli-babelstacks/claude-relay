@@ -77,6 +77,13 @@ routes:
   - name: jira-comment-mention-roster
     # 不用给每个人单独写一条路由：正文里出现 "@某人"，且这个名字在花名册 JSON
     # 里有记录，就唤醒对应会话；一条评论 @ 多个人会分别唤醒。见 roster.example.json。
+    #
+    # 故意不配 rate.per_hour：这条路由是全组织共用的（所有人、所有卡都走它），
+    # 人数一多很容易比静态路由快得多地跑满一个按路由算的限流，而且限流丢弃不
+    # 进死信、不重试——一条真实消息可能就这样被默默丢了（实测踩过，20/小时在
+    # 几十人规模、>200 条/小时的真实流量下几分钟就打满）。这类"一条路由服务所有人"
+    # 的场景，建议只靠下面全局的 anti_loop.circuit_breaker 兜底真回环，并把阈值
+    # 设到比你的真实峰值流量留足倍数的余量，不要再加 per_hour。
     source: jira
     event: comment_created
     match:
@@ -88,8 +95,6 @@ routes:
       fields: ["issue_key", "author_display_name", "event", "issue_url"]
       max_body_chars: 0
       prefix: "[claude-relay] Jira 评论提到了你"
-    rate:
-      per_hour: 20
 
   - name: send-ad-hoc
     source: send
