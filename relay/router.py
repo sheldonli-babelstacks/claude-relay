@@ -16,7 +16,7 @@ from typing import Any, Callable
 from .antiloop import CircuitBreakerOpen, check_and_record_wake, looks_self_generated
 from .config import Config, Route
 from .executor import WakeResult, wake, write_dead_letter
-from .roster import find_mentions, load_roster
+from .roster import extract_header_name, find_mentions, load_roster
 from .state import State
 
 logger = logging.getLogger("claude_relay.router")
@@ -163,9 +163,20 @@ class Router:
             body = "\n".join(ev.body_text for ev in events if ev.body_text)
             roster = load_roster(action["roster_path"])
             names = find_mentions(body, roster)
+            self_name = extract_header_name(body)
+            if self_name and self_name in names:
+                # 评论首行自报是「角色｜姓名」，且 @ 到的名字就是这个姓名自己——
+                # 不唤醒自己（GUJI-195 10691：Jira 所有会话共用一个账号，这是唯一能
+                # 识别"这条是我自己发的"的办法，兜底 ignore_body_patterns 没挡住的情况）。
+                logger.info(
+                    "wake_mentioned: 跳过自己唤醒自己 (%s)",
+                    self_name,
+                    extra={"fields": {"route": route.name}},
+                )
+                names = [n for n in names if n != self_name]
             if not names:
                 logger.info(
-                    "wake_mentioned: 正文没提到花名册里的人，跳过",
+                    "wake_mentioned: 正文没提到花名册里的人（或只提到了自己），跳过",
                     extra={"fields": {"route": route.name}},
                 )
                 return None

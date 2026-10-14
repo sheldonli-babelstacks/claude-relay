@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 
 from .config import AntiLoopConfig
+from .roster import extract_header_name
 from .state import State
 
 
@@ -18,6 +19,12 @@ def looks_self_generated(body_text: str, author_id: str | None, cfg: AntiLoopCon
     """命中任一规则就返回原因字符串（真值）；没命中返回 None。"""
     if author_id and author_id in cfg.ignore_authors:
         return f"author {author_id} 在 ignore_authors 黑名单里"
+    # 首行是「角色｜姓名」的，一律判定为我们自己会话发的评论，不触发任何唤醒
+    # （GUJI-195 10691：Jira 所有会话共用一个账号，按 author 过滤无效，只能认这个首行约定；
+    # 这条是硬规则，不经 ignore_body_patterns 配置，防止配置漏写/写错导致回环）。
+    header_name = extract_header_name(body_text)
+    if header_name:
+        return f"首行是「角色｜姓名」格式（{header_name}），判定为会话自己发的评论"
     for pattern in cfg.ignore_body_patterns:
         if re.search(pattern, body_text or "", flags=re.MULTILINE):
             return f"正文命中 ignore_body_patterns: {pattern!r}"

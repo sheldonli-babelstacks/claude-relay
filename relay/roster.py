@@ -12,6 +12,11 @@ from pathlib import Path
 
 _MENTION_RE = re.compile(r"@([A-Za-z][A-Za-z0-9_-]{1,30})")
 
+# 我们各会话发评论的首行约定：「角色｜姓名」，可能后面跟冒号加正文，也可能单独一行
+# 就是这些（纯回执）。两种都要认出来——见 GUJI-195 10691 的回环漏洞（Jira 所有会话
+# 共用一个账号，按 author 过滤无效，只能靠这个首行格式识别「这是我们自己写的」）。
+_ROLE_NAME_HEADER_RE = re.compile(r"^[^\n]{1,20}｜([^\n]{1,20}?)(?:[：:]|$)", re.MULTILINE)
+
 
 def load_roster(path: str) -> dict:
     p = Path(path)
@@ -31,3 +36,11 @@ def find_mentions(body_text: str, roster: dict) -> list[str]:
         if name in roster and name not in seen:
             seen.append(name)
     return seen
+
+
+def extract_header_name(body_text: str) -> str | None:
+    """评论首行是「角色｜姓名」格式（如 "高级经理｜Morgan：..." 或单独一行 "高级经理｜Morgan"）
+    就返回姓名，否则返回 None。用于防自己唤醒自己（GUJI-195 10691）。
+    """
+    m = _ROLE_NAME_HEADER_RE.match(body_text or "")
+    return m.group(1) if m else None
