@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+*.sqlite3
+*.log
+*.jsonl
+/accounts/
+env
+.env
+# 真实部署用的 routes.yaml 含真实 session_id，不是密钥但属于「本项目私有 ID」，不进开源仓。
+# 只有 routes.example.yaml（占位符版本）该被提交。
+/routes.yaml

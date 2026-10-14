@@ -1,0 +1,23 @@
+[Unit]
+Description=claude-relay — Claude Code webhook wake relay
+After=network.target
+
+[Service]
+Type=simple
+User=claude-relay
+Group=claude-relay
+WorkingDirectory=/opt/claude-relay
+EnvironmentFile=/etc/claude-relay/env
+ExecStart=/opt/claude-relay/.venv/bin/python -m relay --config /etc/claude-relay/routes.yaml --bind 127.0.0.1 --port 8787
+Restart=on-failure
+RestartSec=5
+
+# 不是在交互信任过的项目目录下跑（比如 overview），避免莫名其妙继承项目级权限配置；
+# 专用低权限用户、独立工作目录，和任何人的 ~/.claude 都没关系。
+ProtectSystem=strict
+ReadWritePaths=/var/lib/claude-relay
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
