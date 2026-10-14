@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 from .antiloop import CircuitBreakerOpen, check_and_record_wake
 from .config import Config
@@ -38,20 +39,26 @@ def make_handler(config: Config, state: State, router: Router):
             self.end_headers()
             self.wfile.write(payload)
 
+        def _route_path(self) -> str:
+            """self.path 是原始 request-target，带 query string（Jira 原生 webhook 会自带
+            ?triggeredByUser=... 之类的参数）——路由判断只看路径部分。"""
+            return urlsplit(self.path).path
+
         def do_GET(self) -> None:  # noqa: N802
-            if self.path == "/healthz":
+            if self._route_path() == "/healthz":
                 tripped = state.circuit_breaker_tripped()
                 self._respond(200, {"ok": True, "circuit_breaker_tripped": tripped})
                 return
             self._respond(404, {"error": "not found"})
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path == "/hook/github":
+            path = self._route_path()
+            if path == "/hook/github":
                 self._handle_github()
-            elif self.path == "/hook/jira":
+            elif path == "/hook/jira":
                 self._handle_jira()
-            elif self.path.startswith("/send/"):
-                self._handle_send(self.path[len("/send/"):])
+            elif path.startswith("/send/"):
+                self._handle_send(path[len("/send/"):])
             else:
                 self._respond(404, {"error": "not found"})
 
