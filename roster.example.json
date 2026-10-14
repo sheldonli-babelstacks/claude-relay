@@ -1,0 +1,14 @@
+{
+  "Owen": {
+    "team": "共用",
+    "role": "ops",
+    "account": "a",
+    "session_id": "<目标会话 session_id，占位符>"
+  },
+  "Morgan": {
+    "team": "总部",
+    "role": "高级经理",
+    "account": "a",
+    "session_id": "<目标会话 session_id，占位符>"
+  }
+}

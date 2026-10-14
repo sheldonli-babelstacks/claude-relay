@@ -66,6 +66,23 @@ routes:
       enabled: true
       window_seconds: 45   # 短时间内多次 push 合并成一条，不刷屏
 
+  - name: jira-comment-mention-roster
+    # 不用给每个人单独写一条路由：正文里出现 "@某人"，且这个名字在花名册 JSON
+    # 里有记录，就唤醒对应会话；一条评论 @ 多个人会分别唤醒。见 roster.example.json。
+    source: jira
+    event: comment_created
+    match:
+      issue_prefix: "PROJ-"
+    action:
+      type: wake_mentioned
+      roster_path: /var/lib/claude-relay/roster.json
+    template:
+      fields: ["issue_key", "author_display_name", "event", "issue_url"]
+      max_body_chars: 0
+      prefix: "[claude-relay] Jira 评论提到了你"
+    rate:
+      per_hour: 20
+
   - name: send-ad-hoc
     source: send
     action:

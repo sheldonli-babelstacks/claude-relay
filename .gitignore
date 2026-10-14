@@ -10,3 +10,5 @@ env
 # 真实部署用的 routes.yaml 含真实 session_id，不是密钥但属于「本项目私有 ID」，不进开源仓。
 # 只有 routes.example.yaml（占位符版本）该被提交。
 /routes.yaml
+# 同理，真实花名册含全员真实 session_id，不进仓；只提交 roster.example.json 占位符版本。
+/roster.json

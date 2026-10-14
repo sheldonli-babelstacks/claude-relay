@@ -16,6 +16,7 @@ from typing import Any, Callable
 from .antiloop import CircuitBreakerOpen, check_and_record_wake, looks_self_generated
 from .config import Config, Route
 from .executor import WakeResult, wake, write_dead_letter
+from .roster import find_mentions, load_roster
 from .state import State
 
 logger = logging.getLogger("claude_relay.router")
@@ -152,14 +153,42 @@ class Router:
             return None
 
         action = route.action
-        if action["type"] != "wake":
-            logger.info("route action type %r 不是 wake（可能是 routine，MVP 不实现）", action["type"])
-            return None
-
-        account = self.config.accounts[action["account"]]
-        session_id = action["session_id"]
         message = self._build_message(route, events)
 
+        if action["type"] == "wake":
+            account = self.config.accounts[action["account"]]
+            return self._do_wake(route, account, action["session_id"], message)
+
+        if action["type"] == "wake_mentioned":
+            body = "\n".join(ev.body_text for ev in events if ev.body_text)
+            roster = load_roster(action["roster_path"])
+            names = find_mentions(body, roster)
+            if not names:
+                logger.info(
+                    "wake_mentioned: 正文没提到花名册里的人，跳过",
+                    extra={"fields": {"route": route.name}},
+                )
+                return None
+            last_result: WakeResult | None = None
+            for name in names:
+                entry = roster[name]
+                acct_alias = entry.get("account", "a")
+                account = self.config.accounts.get(acct_alias)
+                if account is None:
+                    logger.warning(
+                        "wake_mentioned: %s 的账号 %r 没在 relay 配置里，跳过",
+                        name,
+                        acct_alias,
+                        extra={"fields": {"route": route.name}},
+                    )
+                    continue
+                last_result = self._do_wake(route, account, entry["session_id"], message, mentioned=name)
+            return last_result
+
+        logger.info("route action type %r 不是 wake/wake_mentioned（可能是 routine，MVP 不实现）", action["type"])
+        return None
+
+    def _do_wake(self, route: Route, account, session_id: str, message: str, mentioned: str | None = None) -> WakeResult:
         result = wake(account, session_id, message)
         if not result.ok:
             write_dead_letter(
@@ -175,6 +204,7 @@ class Router:
             extra={
                 "fields": {
                     "route": route.name,
+                    "mentioned": mentioned,
                     "account": account.alias,
                     "session_id": session_id,
                     "exit_code": result.exit_code,

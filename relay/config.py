@@ -111,10 +111,14 @@ def load_config(path: str) -> Config:
 
     routes = []
     for r in raw.get("routes") or []:
-        if r.get("action", {}).get("type") == "wake":
+        action_type = r.get("action", {}).get("type")
+        if action_type == "wake":
             acct = r["action"].get("account")
             if acct not in accounts:
                 raise ConfigError(f"路由 {r['name']} 引用了未定义的账号 {acct!r}")
+        elif action_type == "wake_mentioned":
+            if not r["action"].get("roster_path"):
+                raise ConfigError(f"路由 {r['name']} 是 wake_mentioned 类型，缺 action.roster_path")
         routes.append(
             Route(
                 name=r["name"],
