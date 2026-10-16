@@ -19,6 +19,9 @@ class State:
             "CREATE TABLE IF NOT EXISTS wakes (route TEXT NOT NULL, ts REAL NOT NULL)"
         )
         self._conn.execute(
+            "CREATE TABLE IF NOT EXISTS p2p_wakes (route TEXT NOT NULL, ts REAL NOT NULL)"
+        )
+        self._conn.execute(
             "CREATE TABLE IF NOT EXISTS circuit_breaker (tripped_at REAL, reason TEXT)"
         )
         self._conn.commit()
@@ -50,7 +53,13 @@ class State:
             self._conn.execute("INSERT INTO wakes (route, ts) VALUES (?, ?)", (route, time.time()))
             self._conn.commit()
 
-    # ---- 全局熔断：所有路由合计唤醒数，防回环兜底 ----
+    # 点对点 /send 只记账、不进 wakes：熔断只该数 webhook 自动触发的唤醒，否则正常消息一多就会把熔断拉跳
+    def record_p2p_wake(self, route: str) -> None:
+        with self._lock:
+            self._conn.execute("INSERT INTO p2p_wakes (route, ts) VALUES (?, ?)", (route, time.time()))
+            self._conn.commit()
+
+    # ---- 全局熔断：所有 webhook 路由合计唤醒数，防回环兜底 ----
     def global_wake_count(self, window_seconds: int) -> int:
         now = time.time()
         with self._lock:

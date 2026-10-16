@@ -171,8 +171,8 @@ def make_handler(config: Config, state: State, router: Router):
             # /send 是显式、带令牌认证的点对点消息，不是 webhook 自动触发的——不可能自己
             # 形成回环，所以不过全局熔断那道闸：会话间互相发消息永远可以送达，不会被
             # 别的路由（Jira/GitHub webhook）触发的熔断连带挡住（用户 10-15 明确要求）。
-            # 仍然记一笔 wake，供 /healthz、日志统计用，只是不拿它去判断是否该挡。
-            state.record_wake(route.name)
+            # 记在 p2p_wakes 供统计，不进熔断计数。
+            state.record_p2p_wake(route.name)
 
             result = wake(account, session_id, message)
             if not result.ok:
