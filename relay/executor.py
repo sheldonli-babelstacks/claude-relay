@@ -22,6 +22,8 @@ logger = logging.getLogger("claude_relay.executor")
 WAKE_TIMEOUT_SECONDS = 60
 MAX_RETRIES = 2
 RETRY_BACKOFF_SECONDS = 3
+# 目标会话已归档／失效时重试也没用，直接失败返回，别让调用方干等到超时（10-18 发 M7 踩过）。
+PERMANENT_ERROR_MARKERS = ("is archived", "inactive", "not found")
 
 
 @dataclass
@@ -75,6 +77,15 @@ def wake(account: Account, session_id: str, message: str) -> WakeResult:
                 attempt,
                 proc.returncode,
             )
+            if any(m in last_error for m in PERMANENT_ERROR_MARKERS):
+                return WakeResult(
+                    ok=False,
+                    exit_code=proc.returncode,
+                    session_id=session_id,
+                    account_alias=account.alias,
+                    attempts=attempt,
+                    error=last_error,
+                )
 
         if attempt <= MAX_RETRIES:
             time.sleep(RETRY_BACKOFF_SECONDS * attempt)
