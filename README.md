@@ -57,3 +57,15 @@ MIT，见 [LICENSE](LICENSE)。
 ## 安全
 
 本项目把外部 webhook 消息体当作不可信输入处理：转发给 Claude 会话的消息只拼接白名单字段，并标注消息来源，避免被注入指令。密钥/令牌只能通过部署环境的环境变量或 secrets 提供，任何情况下都不应提交进本仓或写进 issue。`routes.yaml`（含真实 session_id，虽不是密钥但属于使用者的私有信息）不应提交，只提交 `routes.example.yaml` 占位符版本。
+
+## 打 tag：`POST /tag`
+
+云端会话没有推 tag 的权限（HTTP 403），relay 用 GitHub API 替它打 annotated tag，不在本机 checkout。
+
+```
+python3 scripts/tag.py open-guji/open-guji-cv <40 位提交号> v0.3.5 "v0.3.5：…"
+```
+
+令牌和 `/send/send-to-roster` 共用（`CLAUDE_RELAY_TOKEN`）。relay 校验：仓库 owner 在白名单、tag 名形如
+`vX.Y.Z` 或 `vX.Y.Z-rc.N`、提交是 40 位且在默认分支上、同名 tag 不存在。只新建，不改不删；
+每次请求（含被拒的）记到 `<state_dir>/tags.jsonl`。配置见 `routes.example.yaml` 的 `tag_service`。

@@ -1,4 +1,4 @@
-"""HTTP 入口：GitHub webhook、Jira webhook、通用 /send。单进程，默认只绑 127.0.0.1，
+"""HTTP 入口：GitHub webhook、Jira webhook、通用 /send、打 tag 的 /tag。单进程，默认只绑 127.0.0.1，
 对外经反向代理（见 README／deploy/）。
 """
 from __future__ import annotations
@@ -58,6 +58,8 @@ def make_handler(config: Config, state: State, router: Router):
                 self._handle_jira()
             elif path.startswith("/send/"):
                 self._handle_send(path[len("/send/"):])
+            elif path == "/tag":
+                self._handle_tag()
             else:
                 self._respond(404, {"error": "not found"})
 
@@ -114,6 +116,34 @@ def make_handler(config: Config, state: State, router: Router):
                 return
             router.handle(ev)
             self._respond(204)
+
+        def _handle_tag(self) -> None:
+            from .tagger import TagError, create_tag, write_audit
+            from .verify import verify_bearer_token
+
+            ts = config.tag_service
+            if ts is None:
+                self._respond(404, {"error": "tag service not configured"})
+                return
+            if not verify_bearer_token(ts.token, self.headers.get("Authorization")):
+                self._respond(401, {"error": "bad token"})
+                return
+            try:
+                payload = json.loads(self._read_body() or b"{}")
+            except json.JSONDecodeError:
+                self._respond(400, {"error": "bad json"})
+                return
+            audit = {k: str(payload.get(k, ""))[:200] for k in ("from", "repo", "sha", "tag")}
+            try:
+                result = create_tag(ts, payload)
+            except TagError as e:
+                logger.warning("tag rejected", extra={"fields": {**audit, "status": e.status, "error": e.message}})
+                write_audit(config.state_dir, {**audit, "ok": False, "status": e.status, "error": e.message})
+                self._respond(e.status, {"error": e.message})
+                return
+            logger.info("tag created", extra={"fields": {**audit, "tag_sha": result["tag_sha"]}})
+            write_audit(config.state_dir, {**audit, "ok": True, "tag_sha": result["tag_sha"]})
+            self._respond(201, result)
 
         def _handle_send(self, route_name: str) -> None:
             from .verify import verify_bearer_token

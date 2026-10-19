@@ -86,6 +86,7 @@ class Config:
     github_webhook_secret: str | None
     jira_webhook_secret: str | None
     send_tokens: dict[str, str]  # route_name -> bearer token
+    tag_service: Any = None  # tagger.TagServiceConfig；routes.yaml 没配 tag_service 就是 None，/tag 回 404
 
 
 def load_config(path: str) -> Config:
@@ -145,6 +146,20 @@ def load_config(path: str) -> Config:
             if tok:
                 send_tokens[r.name] = tok
 
+    tag_service = None
+    ts = raw.get("tag_service")
+    if ts:
+        from .tagger import DEFAULT_TAG_PATTERN, TagServiceConfig
+
+        if not ts.get("token") or not ts.get("github_token") or not ts.get("allowed_owners"):
+            raise ConfigError("tag_service 要配 token、github_token、allowed_owners")
+        tag_service = TagServiceConfig(
+            token=ts["token"],
+            github_token=ts["github_token"],
+            allowed_owners=list(ts["allowed_owners"]),
+            tag_pattern=ts.get("tag_pattern", DEFAULT_TAG_PATTERN),
+        )
+
     return Config(
         accounts=accounts,
         routes=routes,
@@ -157,4 +172,5 @@ def load_config(path: str) -> Config:
         github_webhook_secret=raw.get("github_webhook_secret"),
         jira_webhook_secret=raw.get("jira_webhook_secret"),
         send_tokens=send_tokens,
+        tag_service=tag_service,
     )

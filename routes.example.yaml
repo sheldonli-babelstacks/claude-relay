@@ -35,6 +35,16 @@ dedup:
   window_seconds: 86400
   db_path: /var/lib/claude-relay/dedup.sqlite3
 
+# POST /tag：替会话打 annotated tag（云端会话推 tag 是 403）。全走 GitHub API，不在本机 checkout。
+# body: {"repo": "open-guji/open-guji-cv", "sha": "<40 位>", "tag": "v0.3.5", "message": "...", "from": "Emerson"}
+# 只新建：tag 名要符合 tag_pattern、提交要在默认分支上、同名 tag 已存在就拒，永远不改不删。
+# 每次请求记一行到 <state_dir>/tags.jsonl。
+tag_service:
+  token: "${SEND_ROSTER_TOKEN}"     # 调用方令牌，和 send-to-roster 共用一把
+  github_token: "${GITHUB_TAG_TOKEN}"  # fine-grained PAT，只给白名单 owner 下仓库的 Contents: write
+  allowed_owners: [open-guji, open-guji-core]
+  # tag_pattern: '^v\d+\.\d+\.\d+(-rc\.\d+)?$'   # 缺省值
+
 routes:
   - name: jira-comment-mentions-manager
     source: jira
