@@ -1,4 +1,4 @@
-"""HTTP 入口：GitHub webhook、Jira webhook、通用 /send、会话自登记 /register、打 tag 的 /tag。单进程，默认只绑 127.0.0.1，
+"""HTTP 入口：GitHub webhook、Jira webhook、通用 /send、会话自登记 /register、打 tag 的 /tag、删远端分支的 /branch/delete。单进程，默认只绑 127.0.0.1，
 对外经反向代理（见 README／deploy/）。
 """
 from __future__ import annotations
@@ -69,6 +69,8 @@ def make_handler(config: Config, state: State, router: Router):
                 self._handle_register()
             elif path == "/tag":
                 self._handle_tag()
+            elif path == "/branch/delete":
+                self._handle_branch_delete()
             else:
                 self._respond(404, {"error": "not found"})
 
@@ -153,6 +155,33 @@ def make_handler(config: Config, state: State, router: Router):
             logger.info("tag created", extra={"fields": {**audit, "tag_sha": result["tag_sha"]}})
             write_audit(config.state_dir, {**audit, "ok": True, "tag_sha": result["tag_sha"]})
             self._respond(201, result)
+
+        def _handle_branch_delete(self) -> None:
+            from .brancher import delete_branches, write_audit
+            from .tagger import TagError
+            from .verify import verify_bearer_token
+
+            ts = config.tag_service  # 复用 tag_service 的令牌、GitHub 令牌和 owner 白名单
+            if ts is None:
+                self._respond(404, {"error": "tag service not configured"})
+                return
+            if not verify_bearer_token(ts.token, self.headers.get("Authorization")):
+                self._respond(401, {"error": "bad token"})
+                return
+            try:
+                payload = json.loads(self._read_body() or b"{}")
+            except json.JSONDecodeError:
+                self._respond(400, {"error": "bad json"})
+                return
+            who = str(payload.get("from", ""))[:200]
+            try:
+                result = delete_branches(ts, payload, lambda e: write_audit(config.state_dir, {"from": who, **e}))
+            except TagError as e:
+                write_audit(config.state_dir, {"from": who, "repo": str(payload.get("repo", ""))[:200], "ok": False, "status": e.status, "error": e.message})
+                self._respond(e.status, {"error": e.message})
+                return
+            logger.info("branch delete", extra={"fields": {"from": who, "repo": result["repo"], "deleted": result["deleted"], "failed": result["failed"]}})
+            self._respond(200, result)
 
         def _handle_send(self, route_name: str) -> None:
             from .verify import verify_bearer_token

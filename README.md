@@ -80,3 +80,16 @@ python3 scripts/tag.py open-guji/open-guji-cv <40 位提交号> v0.3.5 "v0.3.5�
 令牌和 `/send/send-to-roster` 共用（`CLAUDE_RELAY_TOKEN`）。relay 校验：仓库 owner 在白名单、tag 名形如
 `vX.Y.Z` 或 `vX.Y.Z-rc.N`、提交是 40 位且在默认分支上、同名 tag 不存在。只新建，不改不删；
 每次请求（含被拒的）记到 `<state_dir>/tags.jsonl`。配置见 `routes.example.yaml` 的 `tag_service`。
+
+## 删远端分支：`POST /branch/delete`
+
+云端会话 `git push --delete` 是 403，relay 用 GitHub API 替它删。
+
+```
+python3 scripts/branch_delete.py open-guji/guji-workspace 分支A 分支B
+python3 scripts/branch_delete.py open-guji/guji-workspace -f 名单.txt   # 一行一个；「分支<TAB>提交号」时提交号对不上就不删
+```
+
+和 `/tag` 共用令牌、GitHub 令牌和 owner 白名单（`tag_service`），不用另配。拒绝：默认分支、`main`、`rc/*`、
+受保护分支、有打开 PR 的分支。每个分支删除前的提交号记到 `<state_dir>/branches.jsonl`，误删按它恢复：
+`git push origin <sha>:refs/heads/<分支>`。
