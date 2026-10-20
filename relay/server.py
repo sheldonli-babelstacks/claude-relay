@@ -226,8 +226,10 @@ def make_handler(config: Config, state: State, router: Router):
                 text = body_text
                 if role == "inbox":
                     text = (
-                        f"[claude-relay] 收件箱代收：{to_name} 的协调者投不进（ID 可能已换），"
-                        f"请转给本 Project 协调者，或直接处理／在本 thread 告诉用户。\n{body_text}"
+                        f"[claude-relay] 收件箱代收：发给 {to_name} 协调者的消息投不进（协调者已换）。请照做："
+                        f"1) get_channel_session_id 取当前协调者 ID；"
+                        f"2) python3 process/register.py {to_name} --session <该 ID>（ai-team 仓，cse_ 自动换 session_）；"
+                        f"3) send_message 把下面原文转给协调者；没有协调者就在本 thread reply 一行告诉用户。\n{body_text}"
                     )
                 result = wake(account, session_id, text)
                 if result.ok:
