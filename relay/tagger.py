@@ -6,6 +6,7 @@
 - 仓库 owner 在白名单里；
 - tag 名符合 tag_pattern（缺省只收 vX.Y.Z 和 vX.Y.Z-rc.N）；
 - sha 是 40 位完整提交号，而且在默认分支上（compare 默认分支...sha 为 behind／identical）；
+  freeze/* 例外，只要提交在仓库里（冻结代码常在专门分支上，10-20 用户定）；
 - 同名 tag 不存在——只新建，永远不改、不删、不覆盖。
 """
 from __future__ import annotations
@@ -22,6 +23,7 @@ from pathlib import Path
 logger = logging.getLogger("claude_relay.tagger")
 
 API = "https://api.github.com"
+FREEZE_PREFIX = "freeze/"
 DEFAULT_TAG_PATTERN = r"^v\d+\.\d+\.\d+(-rc\.\d+)?$"
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -92,14 +94,22 @@ def create_tag(cfg: TagServiceConfig, payload: dict) -> dict:
         raise TagError(404 if code == 404 else 502, f"读不到仓库 {repo}（GitHub {code}）")
     default_branch = info["default_branch"]
 
-    code, cmp = _gh(cfg, "GET", f"/repos/{repo}/compare/{default_branch}...{sha}")
-    if code == 404:
-        raise TagError(404, f"仓库里没有提交 {sha}，或它和 {default_branch} 没有共同祖先")
-    if code != 200:
-        raise TagError(502, f"比较 {default_branch}...{sha} 失败（GitHub {code}）")
-    # base=默认分支、head=sha：sha 在默认分支上时，head 比 base 落后或相同
-    if cmp.get("status") not in ("behind", "identical"):
-        raise TagError(409, f"提交 {sha[:7]} 不在 {default_branch} 上（compare 状态 {cmp.get('status')}）")
+    if tag.startswith(FREEZE_PREFIX):
+        # freeze/*：冻结代码常在专门分支上（如 recut/vol01-on-0.4.5），只要求提交在这个仓库里（10-20 用户定）
+        code, _ = _gh(cfg, "GET", f"/repos/{repo}/commits/{sha}")
+        if code in (404, 422):
+            raise TagError(404, f"仓库里没有提交 {sha}")
+        if code != 200:
+            raise TagError(502, f"查提交 {sha[:7]} 失败（GitHub {code}）")
+    else:
+        code, cmp = _gh(cfg, "GET", f"/repos/{repo}/compare/{default_branch}...{sha}")
+        if code == 404:
+            raise TagError(404, f"仓库里没有提交 {sha}，或它和 {default_branch} 没有共同祖先")
+        if code != 200:
+            raise TagError(502, f"比较 {default_branch}...{sha} 失败（GitHub {code}）")
+        # base=默认分支、head=sha：sha 在默认分支上时，head 比 base 落后或相同
+        if cmp.get("status") not in ("behind", "identical"):
+            raise TagError(409, f"提交 {sha[:7]} 不在 {default_branch} 上（compare 状态 {cmp.get('status')}）")
 
     code, _ = _gh(cfg, "GET", f"/repos/{repo}/git/ref/tags/{tag}")
     if code == 200:
