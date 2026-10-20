@@ -46,6 +46,17 @@ python3 scripts/send.py Mason "GUJI-224 10860 的消息，看一下"
 
 `scripts/send.py` 只用标准库，哪个会话环境都能直接跑，不用装依赖。令牌是这条路由所有人共用的一份，不是一人一个——谁都能拿它发给花名册里任何人，别写进仓库/卡/日志，只放环境变量。
 
+## 会话自登记与排队：`POST /register`
+
+会话 ID 会变（Project 协调者被平台回收换新），所以 send_named 不再只认静态花名册：
+
+- 会话开工时 `python3 scripts/register.py <名字>`（ID 从 `CLAUDE_CODE_REMOTE_SESSION_ID` 自动读，`--session` 可手动给），
+  relay 记进 `<state_dir>/directory.sqlite3`，以后发给这个名字就投新 ID。`--inbox` 登记备用的「收件箱」会话。
+- 投递顺序：登记的协调者 ID（没登记过就用 roster.json）→ 收件箱。都投不进就排队，`/send` 回 **202** `{"queued": true}`；
+  对方下次 `/register`（协调者）时，排队消息随回执返回并清空。每个名字最多留 200 条。
+- `GET /directory` 看当前生效的地址和排队数。两个接口都用 send-to-roster 同一把令牌。
+- 登记过的名字即使不在 roster.json 里也能收信（新账号默认 `b`，可传 `account`）。
+
 ## 部署
 
 `deploy/claude-relay.service`（systemd，专用低权限用户，`ProtectSystem=strict`）+ `deploy/env.example`（复制成 `/etc/claude-relay/env`，权限 600，不进仓）。
